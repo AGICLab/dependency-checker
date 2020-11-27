@@ -17,7 +17,7 @@ file2="npm_packages.txt"
 
 # Functions ==============================================
 
-# Returns 
+# Returns
 function program_is_installed() {
     # set to 1 initially
     local return_=1
@@ -59,14 +59,13 @@ function npm_package_is_installed() {
 
 # Checks versions of programs
 function check_program_ver() {
-    echo $1
     if [[ $1 = "node" ]]; then
         echo $(node -v)
     elif [[ $1 = "java" ]]; then
         echo $(java -version 2>&1 | head -1 | cut -d'"' -f2 | sed '/^1\./s///' | cut -d'.' -f1)
     else
         # Discards any errors into /dev/null and logs the version otherwise returns 'Unknown'
-        echo $(dpkg -s $1 2> /dev/null | grep Version | awk '{ print $2; }' || echo "Unknown")
+        echo $(dpkg -s $1 2>/dev/null | grep Version | awk '{ print $2; }' || echo "Unknown")
     fi
 }
 
@@ -89,14 +88,14 @@ function echo_pass() {
     printf "$COL_GREEN ${1}%-3s \t✔ version: ${2} $COL_RESET\n"
 }
 
-# Functions ============================================== 
+# Functions ==============================================
 
 echo -e "$COL_CYAN Checking dependencies... $COL_RESET"
 echo -e "$COL_YELLOW Reading files... $COL_RESET"
 
 # TODO: Allow user to provide path for files
 
-missing_files=();
+missing_files=()
 # Check to ensure required files exist
 if [[ ! -f "$file1" ]]; then
     missing_files+=("$file1")
@@ -107,14 +106,13 @@ if [[ ! -f "$file2" ]]; then
 fi
 
 if [[ ${#missing_files[@]} -gt 0 ]]; then
-    printf "$COL_YELLOW Missing files: $COL_RESET" 
-    printf "$COL_RED"
-    for value in "${missing_files[@]}"
-    do
+    printf "$COL_YELLOW Missing files: $COL_RESET"
+    printf "$COL_RED "
+    for value in "${missing_files[@]}"; do
         printf "$value "
     done
     printf "$COL_RESET"
-    echo -e "\n$COL_YELLOW Closing...$COL_RESET" 
+    echo -e "\n$COL_YELLOW Closing...$COL_RESET"
     exit 1
 fi
 
@@ -124,16 +122,16 @@ fi
 while IFS= read -r line; do
     sys_dep="$line"
     echo $sys_dep
-    echo $(check_program_ver $sys_dep)
+    echo "$(check_program_ver $sys_dep)"
     program_installed=($(program_is_installed $sys_dep))
-    echo $program_installed
+    echo ${program_installed[@]}
     if [[ ! ${program_installed[2]} ]]; then
         DEPS_INSTALLED="false"
         echo_fail ${program_installed[1]}
     else
         echo_pass ${program_installed[1]} ${program_installed[2]}
     fi
-done < "$file1"
+done <"$file1"
 
 # Checks the npm package versions
 while IFS= read -r line; do
@@ -146,7 +144,7 @@ while IFS= read -r line; do
     else
         echo_pass ${package_installed[1]} ${package_installed[2]}
     fi
-done < "$file2"
+done <"$file2"
 
 if [[ $DEPS_INSTALLED = "false" ]]; then
     echo
