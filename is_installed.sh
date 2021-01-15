@@ -13,7 +13,9 @@ COL_CYAN=$ESC_SEQ"36;01m"
 # Global Vars
 DEPS_INSTALLED="true"
 file1="programs.txt"
-file2="npm_packages.txt"
+file2="packages.txt"
+app_directory="../kiosk-app/"
+dep_filepath="./"
 
 # Functions ==============================================
 
@@ -71,9 +73,14 @@ function check_program_ver() {
 
 # Checks npm package versions locally and globally if not found locally
 function check_package_ver() {
-    local ver=$(npm list $1 --depth=0 | awk -F@ '{print $2}')
+    # ver=$(npm list $1 --depth=0 | awk -F@ '{print $2}')
+    local ver=$(node -p "require('$1/package.json').version" 2>/dev/null)
     if [[ ! $ver ]]; then
-        local ver=$(npm list -g $1 --depth=0 | awk -F@ '{print $2}')
+        # cd ~ >/dev/null
+        local global_packages=$(ls $(npm root -g))
+        if [[ $global_packages == *"$1"* ]]; then
+            local ver=$(npm list -g $1 --depth=0 | awk -F@ '{print $2}')
+        fi
     fi
     echo $ver
 }
@@ -85,58 +92,82 @@ function echo_fail() {
 
 # displays a message in green with a tick by it and the version number
 function echo_pass() {
-    printf "$COL_GREEN ${1}%-3s \t✔ version: ${2} $COL_RESET\n"
+    printf "$COL_GREEN ${1}%-3s \t✔  version: ${2} $COL_RESET\n"
 }
 
 # Functions ==============================================
 
+if [[ $# -gt 0 ]]; then
+    # Loops through args if provided
+    while [[ "$#" -gt 0 ]]; do
+        case "$1" in
+        -d | --directory)
+            app_directory="$2"
+            shift # past argument
+            shift # past value
+            ;;
+        -p | --filepath)
+            dep_filepath="$2"
+            shift # past argument
+            shift # past value
+            ;;
+        *)
+            exit 1
+            ;;
+        esac
+    done
+fi
+
 echo -e "$COL_CYAN Checking dependencies... $COL_RESET"
 echo -e "$COL_YELLOW Reading files... $COL_RESET"
 
-# TODO: Allow user to provide path for files
-
 missing_files=()
 # Check to ensure required files exist
-if [[ ! -f "$file1" ]]; then
+if [[ ! -f "${filepath}$file1" ]]; then
     missing_files+=("$file1")
 fi
 
-if [[ ! -f "$file2" ]]; then
+if [[ ! -f "${filepath}$file2" ]]; then
     missing_files+=("$file2")
 fi
 
 if [[ ${#missing_files[@]} -gt 0 ]]; then
-    printf "$COL_YELLOW Missing files: $COL_RESET"
+    printf "$COL_YELLOW Missing files: $COL_RESET "
     printf "$COL_RED "
     for value in "${missing_files[@]}"; do
         printf "$value "
     done
-    printf "$COL_RESET"
+    printf "$COL_RESET "
     echo -e "\n$COL_YELLOW Closing...$COL_RESET"
     exit 1
 fi
 
-# TODO: Check if files are empty with [ -s filename ]
+if [[ ! -s $file1 || ! -s $file2 ]]; then
+    echo "One or both files are empty"
+    exit 1
+fi
+
+echo -n -e " ${COL_YELLOW}Reading dependencies from directory: $app_directory${COL_RESET}\n"
 
 # Checks the program versions
-while IFS= read -r line; do
+while read line || [ -n "$line" ]; do
     sys_dep="$line"
-    echo $sys_dep
-    echo "$(check_program_ver $sys_dep)"
     program_installed=($(program_is_installed $sys_dep))
-    echo ${program_installed[@]}
     if [[ ! ${program_installed[2]} ]]; then
         DEPS_INSTALLED="false"
         echo_fail ${program_installed[1]}
     else
         echo_pass ${program_installed[1]} ${program_installed[2]}
     fi
-done <"$file1"
+done <"${filepath}$file1"
 
 # Checks the npm package versions
-while IFS= read -r line; do
+while read line || [ -n "$line" ]; do
     npm_dep="$line"
-    package_installed=($(npm_package_is_installed $npm_dep))
+    package_installed=($(
+        cd $app_directory >/dev/null
+        npm_package_is_installed $npm_dep
+    ))
     if [[ ! ${package_installed[2]} ]]; then
         DEPS_INSTALLED="false"
         echo_fail ${package_installed[1]}
@@ -144,7 +175,7 @@ while IFS= read -r line; do
     else
         echo_pass ${package_installed[1]} ${package_installed[2]}
     fi
-done <"$file2"
+done <"${filepath}$file2"
 
 if [[ $DEPS_INSTALLED = "false" ]]; then
     echo
